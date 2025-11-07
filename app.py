@@ -528,6 +528,123 @@ with tab3:
 
 
 
+# # =====================================================
+# # 🤖 TAB 4: Machine Learning Cost Optimization Model
+# # =====================================================
+# from sklearn.model_selection import train_test_split
+# from sklearn.linear_model import LinearRegression
+# from sklearn.metrics import mean_absolute_error, r2_score
+
+# with tab4:
+#     st.header("🤖 Machine Learning Model – EC2 Cost Prediction")
+#     st.markdown("""
+#     This section uses a simple **Linear Regression** model to predict the **hourly cost (USD)** 
+#     of EC2 instances based on performance metrics such as CPU utilization, memory, or storage.
+#     It helps identify which metrics most influence cost, and estimate cost for new configurations.
+#     """)
+
+#     # --- Helper function to detect relevant columns ---
+#     def find_column(df, keywords):
+#         for col in df.columns:
+#             if any(k.lower() in col.lower().replace(" ", "") for k in keywords):
+#                 return col
+#         return None
+
+#     # --- Automatically detect the key columns ---
+#     cpu_col = find_column(filtered_ec2, ["cpuutil", "cpuusage", "cpuutilization"])
+#     cost_col = find_column(filtered_ec2, ["costperhour", "hourlycost", "costusd", "priceusd"])
+
+#     # --- Display detected columns ---
+#     st.write("📋 Columns detected in EC2 dataset:", filtered_ec2.columns.tolist())
+
+#     if cpu_col and cost_col:
+#         st.success(f"✅ Detected columns: CPU → **{cpu_col}**, Cost → **{cost_col}**")
+
+#         # --- Select numeric columns for model training ---
+#         numeric_cols = filtered_ec2.select_dtypes(include=["float64", "int64"]).columns.tolist()
+#         feature_cols = [col for col in numeric_cols if col != cost_col]
+
+#         if len(feature_cols) == 0:
+#             st.warning("⚠️ No numeric columns found to train the model.")
+#         else:
+#             # Prepare training data
+#             X = filtered_ec2[feature_cols].fillna(0)
+#             y = filtered_ec2[cost_col].fillna(0)
+
+#             # Split data
+#             X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+#             # Train model
+#             model = LinearRegression()
+#             model.fit(X_train, y_train)
+#             y_pred = model.predict(X_test)
+
+#             # --- Model Performance ---
+#             st.subheader("📊 Model Performance")
+#             st.write(f"**R² Score:** {r2_score(y_test, y_pred):.3f}")
+#             st.write(f"**Mean Absolute Error (USD/hour):** {mean_absolute_error(y_test, y_pred):.4f}")
+
+#             # --- Actual vs Predicted Plot ---
+#             st.subheader("📈 Actual vs Predicted Costs")
+#             result_df = pd.DataFrame({"Actual": y_test, "Predicted": y_pred})
+#             fig_pred = px.scatter(
+#                 result_df, x="Actual", y="Predicted", trendline="ols",
+#                 title="Actual vs Predicted Hourly Costs (USD)", template="plotly_white"
+#             )
+#             st.plotly_chart(fig_pred, use_container_width=True)
+
+#             # --- Feature Importance ---
+#             st.subheader("🔍 Feature Importance")
+#             importance_df = pd.DataFrame({
+#                 "Feature": feature_cols,
+#                 "Coefficient": model.coef_
+#             }).sort_values("Coefficient", ascending=False)
+
+#             fig_importance = px.bar(
+#                 importance_df, x="Feature", y="Coefficient",
+#                 title="Feature Impact on Hourly Cost", template="plotly_white"
+#             )
+#             st.plotly_chart(fig_importance, use_container_width=True)
+
+#             # --- Dynamic Input for User Prediction ---
+#             st.subheader("🔮 Predict Hourly Cost for Custom Input")
+#             input_data = {}
+
+#             for feature in feature_cols[:3]:  # Only first 3 features for simplicity
+#                 col_min = float(X[feature].min())
+#                 col_max = float(X[feature].max())
+#                 col_mean = float(X[feature].mean())
+
+#                 # Safe dynamic range
+#                 lower_bound = max(0.0, col_min)
+#                 upper_bound = max(col_max * 1.5, col_mean * 10, 1e6)
+
+#                 val = st.number_input(
+#                     f"Enter value for {feature}",
+#                     min_value=lower_bound,
+#                     max_value=upper_bound,
+#                     value=min(col_mean, upper_bound / 2),
+#                     step=max(1.0, (upper_bound - lower_bound) / 100),
+#                     help=f"Suggested range: {lower_bound:.2f} – {upper_bound:.2f}"
+#                 )
+#                 input_data[feature] = val
+
+#             if st.button("Predict Cost"):
+#                 new_df = pd.DataFrame([input_data])
+#                 prediction = model.predict(new_df)[0]
+#                 st.success(f"💰 Predicted Hourly Cost: **${prediction:.4f} USD/hour**")
+
+#                 # --- Optional FinOps insight ---
+#                 st.info(
+#                     f"💡 If you reduced CPU utilization by 20%, the estimated cost could drop to "
+#                     f"**${prediction * 0.8:.4f} USD/hour** (approximate savings)."
+#                 )
+
+#     else:
+#         st.warning("⚠️ Required columns ('CPUUtilization' and 'CostPerHourUSD' or similar) not found in EC2 dataset.")
+
+
+
 # =====================================================
 # 🤖 TAB 4: Machine Learning Cost Optimization Model
 # =====================================================
@@ -584,13 +701,30 @@ with tab4:
             st.write(f"**R² Score:** {r2_score(y_test, y_pred):.3f}")
             st.write(f"**Mean Absolute Error (USD/hour):** {mean_absolute_error(y_test, y_pred):.4f}")
 
-            # --- Actual vs Predicted Plot ---
+            # --- Actual vs Predicted Plot (with regression line) ---
             st.subheader("📈 Actual vs Predicted Costs")
             result_df = pd.DataFrame({"Actual": y_test, "Predicted": y_pred})
-            fig_pred = px.scatter(
-                result_df, x="Actual", y="Predicted", trendline="ols",
-                title="Actual vs Predicted Hourly Costs (USD)", template="plotly_white"
-            )
+
+            try:
+                import statsmodels.api  # ensures availability for OLS trendline
+                fig_pred = px.scatter(
+                    result_df,
+                    x="Actual",
+                    y="Predicted",
+                    trendline="ols",
+                    title="Actual vs Predicted Hourly Costs (USD)",
+                    template="plotly_white"
+                )
+            except ModuleNotFoundError:
+                fig_pred = px.scatter(
+                    result_df,
+                    x="Actual",
+                    y="Predicted",
+                    title="Actual vs Predicted Hourly Costs (USD)",
+                    template="plotly_white"
+                )
+                st.warning("⚠️ 'statsmodels' not installed — regression line hidden. Add it to requirements.txt to show it.")
+
             st.plotly_chart(fig_pred, use_container_width=True)
 
             # --- Feature Importance ---
@@ -601,8 +735,11 @@ with tab4:
             }).sort_values("Coefficient", ascending=False)
 
             fig_importance = px.bar(
-                importance_df, x="Feature", y="Coefficient",
-                title="Feature Impact on Hourly Cost", template="plotly_white"
+                importance_df,
+                x="Feature",
+                y="Coefficient",
+                title="Feature Impact on Hourly Cost",
+                template="plotly_white"
             )
             st.plotly_chart(fig_importance, use_container_width=True)
 
@@ -615,7 +752,6 @@ with tab4:
                 col_max = float(X[feature].max())
                 col_mean = float(X[feature].mean())
 
-                # Safe dynamic range
                 lower_bound = max(0.0, col_min)
                 upper_bound = max(col_max * 1.5, col_mean * 10, 1e6)
 
@@ -630,11 +766,16 @@ with tab4:
                 input_data[feature] = val
 
             if st.button("Predict Cost"):
+                # 🩹 FIX: Ensure all training columns exist in new_df
                 new_df = pd.DataFrame([input_data])
+                for col in feature_cols:
+                    if col not in new_df.columns:
+                        new_df[col] = X[col].mean()  # fill missing with mean
+                new_df = new_df[feature_cols]  # keep same column order
+
                 prediction = model.predict(new_df)[0]
                 st.success(f"💰 Predicted Hourly Cost: **${prediction:.4f} USD/hour**")
 
-                # --- Optional FinOps insight ---
                 st.info(
                     f"💡 If you reduced CPU utilization by 20%, the estimated cost could drop to "
                     f"**${prediction * 0.8:.4f} USD/hour** (approximate savings)."
@@ -642,6 +783,7 @@ with tab4:
 
     else:
         st.warning("⚠️ Required columns ('CPUUtilization' and 'CostPerHourUSD' or similar) not found in EC2 dataset.")
+
 
 
 
